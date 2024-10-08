@@ -4,6 +4,8 @@
 
 "use client";
 
+import classes from "./process-plot.module.css";
+
 import Plotly from "plotly.js-basic-dist";
 import createPlotlyComponent from "react-plotly.js/factory";
 import { DenormalizedProcess } from "../denormalized-process";
@@ -18,6 +20,7 @@ const Plot = createPlotlyComponent(Plotly);
 export const ProcessPlot = ({ processes, colors }: ChartProps) => {
   return (
     <Plot
+      className={classes.plotBox}
       data={processes.map((process, index) => ({
         x: process.info.data.values.map(([x, _]) => x),
         y: process.info.data.values.map(([_, y]) => y),
@@ -45,6 +48,7 @@ export const ProcessPlot = ({ processes, colors }: ChartProps) => {
           title: "$\\text{Energy }\\left(\\mathrm{eV}\\right)$",
           type: "log",
           tickformat: ".0e",
+          tickmode: "linear",
           ticks: "inside",
           tickwidth: 1,
           // @ts-ignore
@@ -56,7 +60,10 @@ export const ProcessPlot = ({ processes, colors }: ChartProps) => {
         width: 700,
         height: 600,
         yaxis: {
-          title: "$\\text{Cross section} \\left(\\mathrm{m}^2\\right)$",
+          title: {
+            text: "$\\text{Cross section} \\left(\\mathrm{m}^2\\right)$",
+            standoff: 15,
+          },
           type: "log",
           tickformat: ".0e",
           ticks: "inside",

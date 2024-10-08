@@ -19,6 +19,7 @@ import {
   getUserByEmail,
   getUserByKey,
   linkAccount,
+  listContributors,
   listOrganizations,
   listUsers,
   makeAdmin,
@@ -44,13 +45,7 @@ import {
   getVersionInfo as getItemVersionInfo,
   searchOwned,
 } from "./cs/queries/author-read.js";
-import {
-  byId,
-  byIds,
-  csHistory,
-  getCSHeadings,
-  search,
-} from "./cs/queries/public.js";
+import { byId, byIds, csHistory, getCSHeadings } from "./cs/queries/public.js";
 import {
   createCS,
   createDraftCS,
@@ -84,6 +79,7 @@ import {
   updateVersionStatus as updateSetVersionStatus,
 } from "./css/queries/author-write.js";
 import { getSetAffiliation } from "./css/queries/get-affiliation.js";
+import { getNumItemsInSet } from "./css/queries/get-num-items-in-set.js";
 import {
   activeSetOfArchivedSet,
   byId as setById,
@@ -294,6 +290,8 @@ export class LXCatDatabase {
   public updateSession = updateSession;
   public dropSession = dropSession;
 
+  public listContributors = listContributors;
+
   public listOrganizations = listOrganizations;
   public addOrganization = addOrganization;
   public dropOrganization = dropOrganization;
@@ -339,7 +337,6 @@ export class LXCatDatabase {
   public itemHistory = csHistory;
   public getItemHeadings = getCSHeadings;
   public getItemById = byId;
-  public searchItem = search;
 
   // write
   public createItem = createCS;
@@ -370,6 +367,9 @@ export class LXCatDatabase {
 
   // css/get-affiliation
   public getSetAffiliation = getSetAffiliation;
+
+  // css/get-num-items-in-set
+  public getNumItemsInSet = getNumItemsInSet;
 
   // cs/picker
   public getSearchOptions = getSearchOptions;

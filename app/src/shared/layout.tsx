@@ -5,7 +5,8 @@
 import Head from "next/head";
 import Link from "next/link";
 import { ReactNode } from "react";
-import { NavBar } from "./nav-bar";
+import { DemoAlert } from "./demo-alert";
+import { NavBar } from "./header/nav-bar";
 
 interface Props {
   children: ReactNode;
@@ -28,6 +29,7 @@ export const Layout = ({ children, title = "" }: Props) => {
         />
       </Head>
       <NavBar />
+      <DemoAlert />
       <main style={{ padding: 10 }}>{children}</main>
       <footer>
         <div style={{ padding: 10 }}>

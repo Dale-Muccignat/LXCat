@@ -20,17 +20,17 @@
   },
   "dependencies": {
     "zod": "3.23.6",
-    "zod-to-json-schema": "^3.23.2"
+    "zod-to-json-schema": "^3.23.3"
   },
   "devDependencies": {
     "@lxcat/tsconfig": "workspace:^",
     "@typescript-eslint/eslint-plugin": "^7.17.0",
-    "@vitest/coverage-v8": "^2.0.5",
+    "@vitest/coverage-v8": "^2.1.2",
     "dprint": "^0.47.2",
     "eslint": "8.57.0",
-    "tsx": "^4.18.0",
-    "typescript": "^5.5.4",
-    "vitest": "^2.0.5"
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
   },
   "exports": {
     ".": {

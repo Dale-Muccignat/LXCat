@@ -9,7 +9,6 @@ import { LXCatDatabase } from "../../lxcat-database.js";
 import { OwnedProcess } from "../../schema/process.js";
 import { PagingOptions } from "../../shared/types/search.js";
 import { KeyedVersionInfo } from "../../shared/types/version-info.js";
-import { ReactionTemplate } from "../picker/types.js";
 import { CrossSectionHeading } from "../public.js";
 
 export async function byId(this: LXCatDatabase, id: string) {
@@ -62,21 +61,54 @@ export async function byId(this: LXCatDatabase, id: string) {
 
 export async function byIds(this: LXCatDatabase, ids: string[]) {
   const cursor: ArrayCursor<LTPMixture> = await this.db.query(aql`
-    LET sets = MERGE(
+    LET setIdsUnfiltered = (
       FOR cs IN CrossSection
         FILTER cs._key IN ${ids}
         FILTER cs.versionInfo.status != 'draft'
         FOR css IN OUTBOUND cs IsPartOf
           FILTER css.versionInfo.status != 'draft'
-          RETURN {[css._key]:  MERGE(UNSET(css, ["_rev", "_id", "organization"]), {contributor: UNSET(DOCUMENT(css.organization), ["_id", "_key", "_rev"])})}
+          RETURN DISTINCT css._id
     )
-    LET references = MERGE(
+    LET setIds = (
+      FOR setId IN setIdsUnfiltered
+        let hasNewer = FIRST(
+          FOR setNewer IN 1..1000000 INBOUND setId CrossSectionSetHistory
+            FILTER setNewer.versionInfo.status != 'draft'
+            FILTER setNewer._id IN setIdsUnfiltered
+            RETURN 1
+        )
+        FILTER IS_NULL(hasNewer)
+        return setId
+    )
+    LET sets = MERGE(
+      FOR setId IN setIds
+        LET css = FIRST(
+          FOR css IN CrossSectionSet
+            FILTER css._id == setId
+            RETURN css
+        )
+        RETURN {[css._key]: MERGE(
+          UNSET(css, ["_rev", "_id", "organization", "publishedIn"]),
+          {contributor: UNSET(DOCUMENT(css.organization), ["_id", "_key", "_rev"])},
+          IS_NULL(css.publishedIn) ? {} : {publishedIn: PARSE_IDENTIFIER(css.publishedIn).key}
+        )}
+    )
+    LET itemReferences = MERGE(
       FOR cs IN CrossSection
         FILTER cs._key IN ${ids}
         FILTER cs.versionInfo.status != 'draft'
         FOR r IN OUTBOUND cs References
           RETURN {[r._key]: UNSET(r, ["_key", "_rev", "_id"])}
     )
+    LET setReferences = MERGE(
+      FOR setId IN setIds
+        FOR set IN CrossSectionSet
+          FILTER set._id == setId
+          FOR r IN Reference
+            FILTER set.publishedIn == r._id
+            RETURN {[r._key]: UNSET(r, ["_key", "_rev", "_id"])}
+    )
+    LET references = MERGE([setReferences, itemReferences])
     LET states = MERGE(
       FOR cs IN CrossSection
         FILTER cs._key IN ${ids}
@@ -142,6 +174,7 @@ export async function byIds(this: LXCatDatabase, ids: string[]) {
         LET sets2 = (
           FOR p IN IsPartOf
             FILTER cs._id == p._from
+            FILTER p._to IN setIds
             RETURN PARSE_IDENTIFIER(p._to).key
         )
         RETURN { reaction, info: [MERGE({ _key: cs._key, versionInfo: cs.versionInfo, references: refs2, isPartOf: sets2 }, cs.info)] }
@@ -217,56 +250,10 @@ export async function getCSHeadings(
               FILTER ref._id == css.publishedIn
               RETURN UNSET(ref, ["_key", "_rev", "_id"])
           )
-          RETURN MERGE(UNSET(css, ["_key", "_rev", "_id"]), { "id": css._key, "organization": org.name, "publishedIn": ref })
+          RETURN MERGE(UNSET(css, ["_key", "_rev", "_id"]), { id: css._key, organization: org.name, publishedIn: ref })
 	    )
 	    ${limitAql}
-	    RETURN { "id": cs._key, "reaction": reaction, "reference": refs, "isPartOf": setNames}
-	`;
-  const cursor: ArrayCursor<CrossSectionHeading> = await this.db.query(q);
-  return await cursor.all();
-}
-
-// TODO: Can this function be removed?
-export async function search(
-  this: LXCatDatabase,
-  _templates: Array<ReactionTemplate>,
-  paging: PagingOptions,
-) {
-  const reactionsAql = aql``; // TODO implement
-  const limitAql = aql`LIMIT ${paging.offset}, ${paging.count}`;
-  const q = aql`
-	FOR cs IN CrossSection
-    FILTER cs.versionInfo.status == 'published'
-	  LET refs = (
-		FOR rs IN References
-		  FILTER rs._from == cs._id
-		  FOR r IN Reference
-			FILTER r._id == rs._to
-			RETURN UNSET(r, ["_key", "_rev", "_id"])
-	  )
-    ${reactionsAql}
-	  LET reaction = FIRST(
-		FOR r in Reaction
-		  FILTER r._id == cs.reaction
-		  LET consumes = (
-			FOR c IN Consumes
-			FILTER c._from == r._id
-			  FOR c2s IN State
-			  FILTER c2s._id == c._to
-			  RETURN {state: UNSET(c2s, ["_key", "_rev", "_id"]), count: c.count}
-		  )
-		  LET produces = (
-			FOR p IN Produces
-			FILTER p._from == r._id
-			  FOR p2s IN State
-			  FILTER p2s._id == p._to
-			  RETURN {state: UNSET(p2s, ["_key", "_rev", "_id"]), count: p.count}
-		  )
-		  RETURN MERGE(UNSET(r, ["_key", "_rev", "_id"]), {"lhs":consumes, "rhs": produces})
-	  )
-	  LET setNames = [] // TODO implement
-	  ${limitAql}
-	  RETURN { "id": cs._key, "reaction": reaction, "reference": refs, "isPartOf": setNames}
+	    RETURN { id: cs._key, reaction: reaction, threshold: cs.info.threshold, reference: refs, isPartOf: setNames }
 	`;
   const cursor: ArrayCursor<CrossSectionHeading> = await this.db.query(q);
   return await cursor.all();

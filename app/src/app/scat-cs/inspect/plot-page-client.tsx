@@ -4,6 +4,8 @@
 
 "use client";
 
+import { annotateMixture } from "@/shared/annotate-mixture";
+import { LTPMixture } from "@lxcat/schema";
 import {
   Alert,
   Button,
@@ -29,8 +31,10 @@ import { ButtonClipboard } from "./button-clipboard";
 import { ButtonMultiDownload } from "./button-multi-download";
 import { colorScheme } from "./colors";
 import classes from "./inspect.module.css";
+import { toLegacyAction } from "./legacy-action";
 import { ProcessTable } from "./process-table";
 import { Reference } from "./reference";
+import { SetStats, SetTable } from "./set-table";
 import { TermsOfUseCheck } from "./terms-of-use-check";
 import { FormattedReference } from "./types";
 
@@ -46,16 +50,33 @@ const Chart = dynamic(
   },
 );
 
+const downloadFile = (
+  jsonString: string,
+  fileName: string,
+  type: string = "application/json",
+) => {
+  const file = new Blob([jsonString], { type });
+  const element = document.createElement("a");
+  element.href = URL.createObjectURL(file);
+  element.download = fileName;
+  document.body.appendChild(element);
+  element.click();
+  element.remove();
+};
+
 const NUM_LINES_INIT = 5;
 
 export const PlotPageClient = (
-  { processes, refs, setMismatch, permaLink, forceTermsOfUse }: {
-    processes: Array<DenormalizedProcess>;
-    refs: Array<FormattedReference>;
-    setMismatch: boolean;
-    permaLink: string;
-    forceTermsOfUse?: boolean;
-  },
+  { processes, refs, setStats, setMismatch, data, permaLink, forceTermsOfUse }:
+    {
+      processes: Array<DenormalizedProcess>;
+      refs: Array<FormattedReference>;
+      setStats: SetStats;
+      setMismatch: boolean;
+      data: LTPMixture;
+      permaLink: string;
+      forceTermsOfUse?: boolean;
+    },
 ) => {
   const router = useRouter();
 
@@ -65,17 +86,29 @@ export const PlotPageClient = (
 
   const [warningVisible, setWarningVisibility] = useState(true);
 
-  let colorMap = new Map(
+  const colorMap = new Map(
     processes.map((
       { info: { _key: id } },
       index,
     ) => [id, colorScheme[index % colorScheme.length]]),
   );
 
-  let referenceMarkers = new Map(refs.map(({ id }, index) => [id, index + 1]));
+  const referenceMarkers = new Map(
+    refs.map(({ id }, index) => [id, index + 1]),
+  );
 
-  let idsString = processes.map(({ info: { _key: id } }) => id).join(",");
-  let idsPath = processes.map(({ info: { _key: id } }) => id).join("/");
+  const idsString = processes.map(({ info: { _key: id } }) => id).join(",");
+  const idsPath = processes.map(({ info: { _key: id } }) => id).join("/");
+
+  // The compute button should only be available when every process is either
+  // not from a complete set, or from a complete set whose items are all in the
+  // selection.
+  const canCompute = data.processes.flatMap(({ info }) => info).every((info) =>
+    info.isPartOf.some((setKey) =>
+      !data.sets[setKey].complete
+      || setStats[setKey].selected === setStats[setKey].total
+    )
+  );
 
   return (
     <>
@@ -110,11 +143,19 @@ export const PlotPageClient = (
                 <ButtonMultiDownload
                   entries={[{
                     text: "JSON",
-                    link: `/api/scat-cs/inspect?ids=${idsString}`,
+                    link: async () =>
+                      downloadFile(
+                        JSON.stringify(annotateMixture(data)),
+                        "lxcat-data.json",
+                      ),
                     icon: <IconCodeDots stroke={1.5} />,
                   }, {
                     text: "Plaintext",
-                    link: `/api/scat-cs/inspect/legacy?ids=${idsString}`,
+                    link: async () =>
+                      downloadFile(
+                        await toLegacyAction(data),
+                        "lxcat-data.txt",
+                      ),
                     icon: <IconFileText stroke={1.5} />,
                   }]}
                 >
@@ -123,20 +164,30 @@ export const PlotPageClient = (
                 <ButtonClipboard link={permaLink}>
                   Copy permalink
                 </ButtonClipboard>
-                <Button
-                  size="md"
-                  rightSection={<IconCalculator size="1.2rem" stroke={1.5} />}
-                  onClick={() =>
-                    router.push(`/scat-cs/compute?ids=${idsString}`)}
-                >
-                  Compute
-                </Button>
+                {canCompute
+                  && (
+                    <Button
+                      size="md"
+                      rightSection={
+                        <IconCalculator size="1.2rem" stroke={1.5} />
+                      }
+                      onClick={() =>
+                        router.push(`/scat-cs/compute?ids=${idsString}`)}
+                    >
+                      Compute
+                    </Button>
+                  )}
               </Button.Group>
             </Center>
           </Stack>
         </Grid.Col>
         <Grid.Col span="auto">
           <Stack>
+            <SetTable
+              sets={data.sets}
+              stats={setStats}
+              referenceMarkers={referenceMarkers}
+            />
             <ProcessTable
               processes={processes}
               referenceMarkers={referenceMarkers}
